@@ -242,7 +242,7 @@ function openReport(i) {
 
         <div class="sec-title">B. Technical Characteristics</div>
         <div class="grid-2">
-            ${row('Trigger Event', i.LANDSLIDE)} ${row('Classification', i.LANDSLID1)}
+            ${row('Landslide Type', i.LANDSLIDE)} ${row('Landslide Trigger', i.LANDSLID1)}
             ${row('Dimensions (H x L x W)', `${i.HeightTaas || 0}m x ${i.LengthHaba || 0}m x ${i.WidthLapad || 0}m`)}
             ${row('Land Cover', i.LANDCOVER)}
             ${row('AWS Data Link', i.AWSDATA)} ${row('Other Land Features', i.OTHERLAND)}
