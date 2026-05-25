@@ -234,17 +234,18 @@ function openReport(i) {
     const row = (l, v) => `<div class="field-grp"><div class="f-lbl">${l}</div><div class="f-val">${v || '—'}</div></div>`;
     const safeStringify = JSON.stringify(i).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
     
+    // Extracted huge inline styles into CSS classes (.report-header, .report-meta, .no-gps-badge, etc)
     b.innerHTML = `
-        <div style="background:var(--input-bg); padding:25px; border-radius:10px; margin-bottom:25px; border:2px solid var(--border-color); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
+        <div class="report-header">
             <div>
-                <h2 style="margin:0; color:var(--primary); font-size:26px; font-weight:900;">${i.MUNICIPALITY || 'Unknown Area'} Landslide</h2>
-                <div style="font-size:15px; font-weight:700; color:var(--text-muted); margin-top:8px;">
+                <h2>${i.MUNICIPALITY || 'Unknown Area'} Landslide</h2>
+                <div class="report-meta">
                     ${i.PROVINCE || '—'} | ${i.REGION || '—'} | Date: ${i.YYYYMMDD || 'Unknown'} at ${i['12HOURFO'] || '—'} ${i.AMPM || ''}
                 </div>
             </div>
             ${(i.lat !== null && i.lng !== null) ? 
                 `<button class="btn btn-main no-print" style="white-space:nowrap;" onclick="flyToLocation(${safeStringify})">📍 Locate on Map</button>` 
-                : '<span style="color:#ef4444; font-size:14px; font-weight:900; align-self:center; background:#5f1616; padding:8px 12px; border-radius:6px; border:2px solid #ef4444;">NO GPS DATA</span>'}
+                : '<span class="no-gps-badge no-print">NO GPS DATA</span>'}
         </div>
 
         <div class="sec-title">A. Spatial Geography</div>
@@ -277,12 +278,12 @@ function openReport(i) {
             ${row('Date/Time Recorded', i.DATETIMERECORDED)}
         </div>
         
-        <div style="margin-top:20px; padding:15px; background:var(--input-bg); border-radius:8px; border:2px solid var(--border-color);">
+        <div class="report-remarks">
             ${row('Analyst/Encoder Remarks', i.DATETIMEREMARKS)}
-            <div style="font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px;">Encoded by: ${i.ENCODERNAME || 'N/A'} | Timestamp: ${i.TIMESTAMP || 'N/A'}</div>
+            <div class="encoder-meta">Encoded by: ${i.ENCODERNAME || 'N/A'} | Timestamp: ${i.TIMESTAMP || 'N/A'}</div>
         </div>
 
-        ${i.IMAGELINK ? `<div class="sec-title">E. Site Imagery</div><img src="${i.IMAGELINK}" style="width:100%; border-radius:10px; border:2px solid var(--border-color); margin-top:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">` : ''}
+        ${i.IMAGELINK ? `<div class="sec-title">E. Site Imagery</div><img src="${i.IMAGELINK}" class="report-img">` : ''}
     `;
     document.getElementById('dataModal').style.display = 'block';
 }
@@ -346,7 +347,6 @@ function buildCharts(data) {
         });
     };
 
-    // Completeness Donuts always use allTime mapping now
     const createDonut = (id, obj, colors, hide) => {
         const el = document.getElementById(id);
         if(!el) return;
@@ -374,7 +374,6 @@ function buildCharts(data) {
     let sortedTrigObj = {}; trigsSorted.forEach(item => sortedTrigObj[item[0]] = item[1]);
     const trigPalette = ['#ef4444','#f59e0b','#3b82f6','#10b981','#6366f1','#8b5cf6','#ec4899','#14b8a6','#f43f5e', '#64748b', '#06b6d4'];
     
-    // The main Trigger chart still uses filtered data (sortedTrigObj)
     createDonut('chartTrig', sortedTrigObj, trigPalette, true);
 
     const tBody = document.getElementById('tableTrig');
@@ -385,7 +384,6 @@ function buildCharts(data) {
     }
 
     // ALL-TIME COMPLETENESS METRICS
-    // Now mapped to Dark Teal (#0f766e) for "Has Data" and Yellow (#eab308) for "No Data"
     createDonut('chartCoords', allTime.coords, ['#0f766e','#eab308']);
     createDonut('chartLoc', allTime.loc, ['#0f766e','#eab308']);
     createDonut('chartDate', allTime.date, ['#0f766e','#eab308']);
