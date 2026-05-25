@@ -96,6 +96,15 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; marg
 .f-val { font-size: 17px; font-weight: 700; color: var(--text); word-break: break-word; }
 .sec-title { font-size: 15px; font-weight: 900; color: white; background: var(--secondary); padding: 10px 15px; border-radius: 6px; margin: 30px 0 15px 0; text-transform: uppercase; }
 
+/* Cleaned Up Modal Inner Classes */
+.report-header { background:var(--input-bg); padding:25px; border-radius:10px; margin-bottom:25px; border:2px solid var(--border-color); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px; }
+.report-header h2 { margin:0; color:var(--primary); font-size:26px; font-weight:900; }
+.report-meta { font-size:15px; font-weight:700; color:var(--text-muted); margin-top:8px; }
+.no-gps-badge { color:#ef4444; font-size:14px; font-weight:900; align-self:center; background:#5f1616; padding:8px 12px; border-radius:6px; border:2px solid #ef4444; }
+.report-remarks { margin-top:20px; padding:15px; background:var(--input-bg); border-radius:8px; border:2px solid var(--border-color); }
+.encoder-meta { font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px; }
+.report-img { width:100%; border-radius:10px; border:2px solid var(--border-color); margin-top:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); }
+
 .btn { padding: 12px 18px; border-radius: 6px; border: none; font-weight: 800; cursor: pointer; font-size: 14px; transition: 0.2s; display: flex; justify-content: center; align-items: center; }
 .btn-main { background: var(--accent); color: white; width: 100%; }
 .btn-toggle { background: transparent; color: white; border: 2px solid white; }
@@ -121,9 +130,43 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; marg
 .donut-title { display: flex; justify-content: space-between; align-items: center; font-weight: 900; font-size: 12px; color: var(--text); margin-bottom: 15px; background:var(--card-bg); padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color);}
 .donut-wrapper { height: 250px; position: relative; width: 100%; display: flex; justify-content: center; }
 
+/* =========================================
+   A4 PRINT COMPRESSION OVERRIDE
+   ========================================= */
 @media print {
-    body * { visibility: hidden; }
-    #dataModal, #dataModal * { visibility: visible; }
-    #dataModal { position: absolute; left: 0; top: 0; width: 100%; background: white; }
-    .no-print { display: none !important; }
+    @page { size: A4 portrait; margin: 10mm; }
+    
+    /* Document Reset */
+    body { background: white; color: black; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    
+    /* Remove base UI from the flow completely */
+    .navbar, .toolbar, .main-content, .status-bar, #chartModal, .no-print { display: none !important; }
+    
+    /* Bring Modal into standard Document Flow */
+    #dataModal { display: block !important; position: relative !important; left: auto; top: auto; width: 100%; height: auto; background: white; z-index: 1000; overflow: visible; }
+    .m-header { position: static; padding: 0 0 8px 0; border-bottom: 2px solid black; background: transparent !important; color: black; box-shadow: none; display: flex; justify-content: flex-start; }
+    .m-header span { font-size: 16px !important; color: black !important; }
+    .m-body { padding: 10px 0 0 0 !important; max-width: 100%; margin: 0; }
+    
+    /* Compress Report Hero/Header */
+    .report-header { padding: 8px !important; margin-bottom: 10px !important; border: 1px solid black !important; background: transparent !important; border-radius: 0 !important; gap: 5px !important; flex-direction: row; }
+    .report-header h2 { font-size: 16px !important; color: black !important; line-height: 1.1; margin: 0 !important; }
+    .report-meta { font-size: 10px !important; color: #333 !important; margin-top: 4px !important; }
+    .no-gps-badge { display: none !important; } /* Hidden to save space */
+    
+    /* Section Titles */
+    .sec-title { background: #e2e8f0 !important; color: black !important; font-size: 11px !important; font-weight: bold !important; padding: 4px 8px !important; margin: 10px 0 5px 0 !important; border: 1px solid black !important; border-radius: 0 !important; }
+    
+    /* Compress Grids & Fields */
+    .grid-2 { gap: 4px !important; grid-template-columns: 1fr 1fr !important; }
+    .field-grp { padding: 3px 6px !important; background: transparent !important; border: 1px solid #ccc !important; border-radius: 0 !important; margin-bottom: 0 !important; break-inside: avoid; }
+    .f-lbl { font-size: 8px !important; color: #444 !important; margin-bottom: 1px !important; }
+    .f-val { font-size: 11px !important; color: black !important; line-height: 1.2; }
+    
+    /* Remarks Box */
+    .report-remarks { margin-top: 10px !important; padding: 8px !important; border: 1px solid black !important; border-radius: 0 !important; background: transparent !important; break-inside: avoid; }
+    .encoder-meta { font-size: 9px !important; color: #444 !important; margin-top: 4px !important; }
+    
+    /* Image Constraints (Prevents page overflow) */
+    .report-img { max-height: 180px !important; width: auto !important; max-width: 100% !important; margin: 8px auto 0 auto !important; display: block; border-radius: 0 !important; border: 1px solid black !important; box-shadow: none !important; break-inside: avoid; object-fit: contain; }
 }
