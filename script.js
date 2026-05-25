@@ -4,6 +4,11 @@ let db = [];
 let map, markers, userMarker;
 let charts = {}; 
 
+// Theme Initialization
+const savedTheme = localStorage.getItem('theme') || 'light';
+document.documentElement.setAttribute('data-theme', savedTheme);
+Chart.defaults.color = savedTheme === 'dark' ? '#cbd5e1' : '#475569';
+
 // Pagination State Variables
 let currentFilteredData = [];
 let currentPage = 1;
@@ -41,6 +46,19 @@ function init() {
     connectRegistry();
 }
 
+// --- THEME TOGGLE ---
+function toggleTheme() {
+    const root = document.documentElement;
+    const currentTheme = root.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    root.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    Chart.defaults.color = newTheme === 'dark' ? '#cbd5e1' : '#475569';
+    if(currentFilteredData.length > 0) buildCharts(currentFilteredData);
+}
+
 async function connectRegistry() {
     setStatus('SYNCING DATA...', 'warning');
     try {
@@ -64,6 +82,7 @@ async function connectRegistry() {
     }
 }
 
+// --- FILTER CONTROLS ---
 function toggleFilters() {
     const fc = document.getElementById('filterControls');
     fc.classList.toggle('hidden-view');
@@ -83,7 +102,7 @@ function updateDropdownOptions() {
     const reg = document.getElementById('fR').value;
     
     populateDropdown('fR', 'REGION', 'All Regions', timeFiltered);
-    populateDropdown('fT', 'LANDSLIDE', 'All Triggers', timeFiltered);
+    populateDropdown('fT', 'LSTRIGGER', 'All Triggers', timeFiltered);
     populateDropdown('fP', 'PROVINCE', 'All Provinces', reg ? timeFiltered.filter(i => i.REGION === reg) : timeFiltered);
 }
 
@@ -114,7 +133,7 @@ function getFilteredData(onlyTime = false) {
         (!q || Object.values(i).join(' ').toLowerCase().includes(q)) &&
         (!document.getElementById('fR').value || i.REGION === document.getElementById('fR').value) &&
         (!document.getElementById('fP').value || i.PROVINCE === document.getElementById('fP').value) &&
-        (!document.getElementById('fT').value || i.LANDSLIDE === document.getElementById('fT').value)
+        (!document.getElementById('fT').value || i.LSTRIGGER === document.getElementById('fT').value)
     );
 }
 
@@ -123,21 +142,20 @@ function filter() {
     currentFilteredData = getFilteredData();
     document.getElementById('rec-count').innerText = `${currentFilteredData.length} RECORDS MATCHED`;
     
-    currentPage = 1; // Reset to page 1 whenever filters change
+    currentPage = 1; 
     renderPaginatedList();
     buildCharts(currentFilteredData);
 }
 
 function changePage(direction) {
     currentPage += direction;
-    document.getElementById('feed').scrollTop = 0; // Scroll back to top
+    document.getElementById('feed').scrollTop = 0;
     renderPaginatedList();
 }
 
 function renderPaginatedList() {
     markers.clearLayers();
     
-    // Always render ALL filtered markers to the map (gives the geographic overview)
     currentFilteredData.forEach(i => {
         if(i.lat) L.circleMarker([i.lat, i.lng], {radius:8, fillColor:i.deaths>0?'#ef4444':'#f59e0b', color:'#fff', fillOpacity:0.9}).addTo(markers).on('click', () => openReport(i));
     });
@@ -146,18 +164,16 @@ function renderPaginatedList() {
     const paginationEl = document.getElementById('paginationControls');
 
     if (currentFilteredData.length === 0) {
-        feedEl.innerHTML = '<div style="padding:40px; text-align:center; font-size:18px; font-weight:bold; color:#94a3b8; width:100%;">No records found. Adjust your filters or map.</div>';
+        feedEl.innerHTML = '<div style="padding:40px; text-align:center; font-size:18px; font-weight:bold; color:var(--text-muted); width:100%;">No records found. Adjust your filters or map.</div>';
         paginationEl.innerHTML = '';
         return;
     }
 
-    // Pagination Logic
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const pageData = currentFilteredData.slice(startIndex, endIndex);
     const totalPages = Math.ceil(currentFilteredData.length / ITEMS_PER_PAGE);
 
-    // Render List Items
     feedEl.innerHTML = pageData.map(i => {
         const safeStringify = JSON.stringify(i).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
         return `
@@ -165,13 +181,12 @@ function renderPaginatedList() {
                 <div class="lr-id">${i.LSID || 'N/A'}</div>
                 <div class="lr-date">${i.YYYYMMDD || 'Unknown'}</div>
                 <div class="lr-col lr-loc">${i.MUNICIPALITY || 'Unknown'}, ${i.PROVINCE || 'Unknown'}</div>
-                <div class="lr-col"><span class="lr-trig">${i.LANDSLIDE || 'Registry Entry'}</span></div>
+                <div class="lr-col"><span class="lr-trig">${i.LSTRIGGER || 'Registry Entry'}</span></div>
                 ${i.deaths > 0 ? `<div class="lr-badge">💀 ${i.deaths} FATALITIES</div>` : ''}
             </div>
         `;
     }).join('');
 
-    // Render Pagination Buttons
     paginationEl.innerHTML = `
         <button class="btn btn-sec" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(-1)" style="width: auto; padding: 8px 16px;">◀ Prev</button>
         <span style="font-weight: 900; font-size: 14px; color: var(--primary);">Page ${currentPage} of ${totalPages}</span>
@@ -202,7 +217,7 @@ function toggleView(viewType) {
 
     if (viewType === 'map') {
         mapDiv.classList.remove('hidden-view'); mapDiv.classList.add('full-map'); feedDiv.classList.add('hidden-view'); pagDiv.classList.add('hidden-view');
-        btn.innerText = 'Expand Data List'; btn.style.background = '#1e293b'; btn.onclick = () => toggleView('list');
+        btn.innerText = 'Expand Data List'; btn.style.background = 'var(--secondary)'; btn.onclick = () => toggleView('list');
     } else if (viewType === 'list') {
         mapDiv.classList.add('hidden-view'); mapDiv.classList.remove('full-map'); feedDiv.classList.remove('hidden-view'); pagDiv.classList.remove('hidden-view');
         btn.innerText = 'Show Split View'; btn.style.background = '#10b981'; btn.onclick = () => toggleView('split');
@@ -220,16 +235,16 @@ function openReport(i) {
     const safeStringify = JSON.stringify(i).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
     
     b.innerHTML = `
-        <div style="background:#f1f5f9; padding:25px; border-radius:10px; margin-bottom:25px; border:2px solid #e2e8f0; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
+        <div style="background:var(--input-bg); padding:25px; border-radius:10px; margin-bottom:25px; border:2px solid var(--border-color); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
             <div>
                 <h2 style="margin:0; color:var(--primary); font-size:26px; font-weight:900;">${i.MUNICIPALITY || 'Unknown Area'} Landslide</h2>
-                <div style="font-size:15px; font-weight:700; color:#64748b; margin-top:8px;">
+                <div style="font-size:15px; font-weight:700; color:var(--text-muted); margin-top:8px;">
                     ${i.PROVINCE || '—'} | ${i.REGION || '—'} | Date: ${i.YYYYMMDD || 'Unknown'} at ${i['12HOURFO'] || '—'} ${i.AMPM || ''}
                 </div>
             </div>
             ${(i.lat !== null && i.lng !== null) ? 
                 `<button class="btn btn-main no-print" style="white-space:nowrap;" onclick="flyToLocation(${safeStringify})">📍 Locate on Map</button>` 
-                : '<span style="color:#ef4444; font-size:14px; font-weight:900; align-self:center; background:#fef2f2; padding:8px 12px; border-radius:6px; border:2px solid #fecaca;">NO GPS DATA</span>'}
+                : '<span style="color:#ef4444; font-size:14px; font-weight:900; align-self:center; background:#5f1616; padding:8px 12px; border-radius:6px; border:2px solid #ef4444;">NO GPS DATA</span>'}
         </div>
 
         <div class="sec-title">A. Spatial Geography</div>
@@ -242,7 +257,7 @@ function openReport(i) {
 
         <div class="sec-title">B. Technical Characteristics</div>
         <div class="grid-2">
-            ${row('Landslide Type', i.LANDSLIDE)} ${row('Landslide Trigger', i.LANDSLID1)}
+            ${row('Trigger Event (LSTRIGGER)', i.LSTRIGGER)} ${row('Category (LSCATEGORY)', i.LSCATEGORY)}
             ${row('Dimensions (H x L x W)', `${i.HeightTaas || 0}m x ${i.LengthHaba || 0}m x ${i.WidthLapad || 0}m`)}
             ${row('Land Cover', i.LANDCOVER)}
             ${row('AWS Data Link', i.AWSDATA)} ${row('Other Land Features', i.OTHERLAND)}
@@ -262,12 +277,12 @@ function openReport(i) {
             ${row('Date/Time Recorded', i.DATETIMERECORDED)}
         </div>
         
-        <div style="margin-top:20px; padding:15px; background:#fff7ed; border-radius:8px; border:2px solid #ffedd5;">
+        <div style="margin-top:20px; padding:15px; background:var(--input-bg); border-radius:8px; border:2px solid var(--border-color);">
             ${row('Analyst/Encoder Remarks', i.DATETIMEREMARKS)}
-            <div style="font-size:12px; font-weight:800; color:#94a3b8; margin-top:10px;">Encoded by: ${i.ENCODERNAME || 'N/A'} | Timestamp: ${i.TIMESTAMP || 'N/A'}</div>
+            <div style="font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px;">Encoded by: ${i.ENCODERNAME || 'N/A'} | Timestamp: ${i.TIMESTAMP || 'N/A'}</div>
         </div>
 
-        ${i.IMAGELINK ? `<div class="sec-title">E. Site Imagery</div><img src="${i.IMAGELINK}" style="width:100%; border-radius:10px; border:2px solid #cbd5e1; margin-top:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">` : ''}
+        ${i.IMAGELINK ? `<div class="sec-title">E. Site Imagery</div><img src="${i.IMAGELINK}" style="width:100%; border-radius:10px; border:2px solid var(--border-color); margin-top:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">` : ''}
     `;
     document.getElementById('dataModal').style.display = 'block';
 }
@@ -279,15 +294,17 @@ function buildCharts(data) {
     
     ['year','prov','trig','genSrc','specSrc','coords','loc','date','time','completenessTrig','completenessCat'].forEach(id => charts[id]?.destroy());
 
+    // 1. Calculate Standard Metrics based on FILTERED Data
     const c = { year:{}, prov:{}, trig:{}, genSrc:{}, specSrc:{} };
     data.forEach(i => {
         if(i.year !== 'Unknown') c.year[i.year] = (c.year[i.year]||0)+1;
         if(i.PROVINCE) c.prov[i.PROVINCE] = (c.prov[i.PROVINCE]||0)+1;
-        c.trig[i.LANDSLIDE||'Unspecified'] = (c.trig[i.LANDSLIDE||'Unspecified']||0)+1;
+        c.trig[i.LSTRIGGER||'Unspecified'] = (c.trig[i.LSTRIGGER||'Unspecified']||0)+1;
         c.genSrc[i.GENERALSOURCES||'N/A'] = (c.genSrc[i.GENERALSOURCES||'N/A']||0)+1;
         c.specSrc[i.SPECIFICSOURCE||'N/A'] = (c.specSrc[i.SPECIFICSOURCE||'N/A']||0)+1;
     });
 
+    // 2. Calculate Completeness Metrics based on ALL TIME Data (Raw db)
     const allTime = { 
         coords:{'Has GPS':0,'No GPS':0}, 
         loc:{'Has Location':0,'No Location':0}, 
@@ -302,9 +319,13 @@ function buildCharts(data) {
         (i.PROVINCE||i.MUNICIPALITY) ? allTime.loc['Has Location']++ : allTime.loc['No Location']++;
         (i.YYYYMMDD && i.year !== 'Unknown') ? allTime.date['Has Date']++ : allTime.date['Unknown Date']++;
         (i['12HOURFO']) ? allTime.time['Has Time']++ : allTime.time['No Time']++;
-        (i.LANDSLIDE && String(i.LANDSLIDE).trim() !== '' && i.LANDSLIDE !== 'Unspecified') ? allTime.trigger['Has Data']++ : allTime.trigger['No Data']++;
-        (i.LANDSLID1 && String(i.LANDSLID1).trim() !== '' && i.LANDSLID1 !== 'Unspecified') ? allTime.category['Has Data']++ : allTime.category['No Data']++;
+        
+        (i.LSTRIGGER && String(i.LSTRIGGER).trim() !== '' && i.LSTRIGGER !== 'Unspecified') ? allTime.trigger['Has Data']++ : allTime.trigger['No Data']++;
+        (i.LSCATEGORY && String(i.LSCATEGORY).trim() !== '' && i.LSCATEGORY !== 'Unspecified') ? allTime.category['Has Data']++ : allTime.category['No Data']++;
     });
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const labelColor = isDark ? '#cbd5e1' : '#475569';
 
     const createScrollableBar = (id, obj, color) => {
         let ent = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
@@ -319,18 +340,19 @@ function buildCharts(data) {
             data: { labels: ent.map(x=>x[0]), datasets: [{data: ent.map(x=>x[1]), backgroundColor: color, borderRadius: 4}] }, 
             options: { 
                 maintainAspectRatio: false, indexAxis:'y', 
-                plugins: { legend: {display:false}, datalabels: {color:'#475569', anchor:'end', align:'right', font: {weight:'bold', size:12}, formatter: v => v>0?v:''} }, 
+                plugins: { legend: {display:false}, datalabels: {color: labelColor, anchor:'end', align:'right', font: {weight:'bold', size:12}, formatter: v => v>0?v:''} }, 
                 layout: {padding: {right: 40}}, scales: { y: { ticks: { font: {weight:'bold'} } } }
             } 
         });
     };
 
+    // Completeness Donuts always use allTime mapping now
     const createDonut = (id, obj, colors, hide) => {
         const el = document.getElementById(id);
         if(!el) return;
         charts[id] = new Chart(el, { 
             type:'doughnut', 
-            data: { labels: Object.keys(obj), datasets: [{ data: Object.values(obj), backgroundColor: colors }] }, 
+            data: { labels: Object.keys(obj), datasets: [{ data: Object.values(obj), backgroundColor: colors, borderColor: isDark ? '#1e293b' : '#ffffff' }] }, 
             options: { 
                 maintainAspectRatio: false, 
                 plugins: { 
@@ -342,7 +364,7 @@ function buildCharts(data) {
     };
 
     const elYear = document.getElementById('chartYear');
-    if(elYear) charts['year'] = new Chart(elYear, { type:'bar', data: { labels: Object.keys(c.year).sort(), datasets: [{data: Object.values(c.year), backgroundColor: '#3b82f6', borderRadius: 4}] }, options: { maintainAspectRatio: false, plugins: {legend:{display:false}, datalabels: {color:'#475569', anchor:'end', align:'top', font:{weight:'bold', size:13}, formatter:v=>v>0?v:''}}, layout:{padding:{top:25}}, scales: { x: { ticks: { font: {weight:'bold'} } } } } });
+    if(elYear) charts['year'] = new Chart(elYear, { type:'bar', data: { labels: Object.keys(c.year).sort(), datasets: [{data: Object.values(c.year), backgroundColor: '#3b82f6', borderRadius: 4}] }, options: { maintainAspectRatio: false, plugins: {legend:{display:false}, datalabels: {color: labelColor, anchor:'end', align:'top', font:{weight:'bold', size:13}, formatter:v=>v>0?v:''}}, layout:{padding:{top:25}}, scales: { x: { ticks: { font: {weight:'bold'} } } } } });
     
     createScrollableBar('chartProv', c.prov, '#f59e0b');
     createScrollableBar('chartGenSrc', c.genSrc, '#8b5cf6');
@@ -351,21 +373,25 @@ function buildCharts(data) {
     let trigsSorted = Object.entries(c.trig).sort((a,b)=>b[1]-a[1]);
     let sortedTrigObj = {}; trigsSorted.forEach(item => sortedTrigObj[item[0]] = item[1]);
     const trigPalette = ['#ef4444','#f59e0b','#3b82f6','#10b981','#6366f1','#8b5cf6','#ec4899','#14b8a6','#f43f5e', '#64748b', '#06b6d4'];
+    
+    // The main Trigger chart still uses filtered data (sortedTrigObj)
     createDonut('chartTrig', sortedTrigObj, trigPalette, true);
 
     const tBody = document.getElementById('tableTrig');
     if(tBody) {
         let tot = Object.values(c.trig).reduce((a, b) => a + b, 0);
-        tBody.innerHTML = `<table style="width:100%; font-size:13px; font-weight:700; text-align:left; background:#1e293b; border-radius:8px; overflow:hidden; border: 2px solid #334155;"><thead><tr style="background:#0f172a; color:#fff;"><th style="padding:10px;">Trigger Event</th><th style="padding:10px; text-align:center;">Count</th><th style="padding:10px; text-align:center;">Share</th></tr></thead><tbody>` + 
-        trigsSorted.map((item, i) => `<tr style="border-top:1px solid #334155; color:#fff;"><td style="padding:8px 10px; display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; background:${trigPalette[i%trigPalette.length]}; border-radius:50%; display:inline-block; flex-shrink:0;"></span><span style="line-height:1.3;">${item[0]}</span></td><td style="padding:8px 10px; text-align:center; font-weight:900; color:#fef08a; font-size:14px;">${item[1]}</td><td style="padding:8px 10px; text-align:center; color:#fef08a;">${tot>0?((item[1]/tot)*100).toFixed(1)+'%':'0%'}</td></tr>`).join('') + `</tbody></table>`;
+        tBody.innerHTML = `<table class="stats-table"><thead><tr><th style="padding:10px;">Trigger Event (LSTRIGGER)</th><th style="padding:10px; text-align:center;">Count</th><th style="padding:10px; text-align:center;">Share</th></tr></thead><tbody>` + 
+        trigsSorted.map((item, i) => `<tr><td style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; background:${trigPalette[i%trigPalette.length]}; border-radius:50%; display:inline-block; flex-shrink:0;"></span><span style="line-height:1.3;">${item[0]}</span></td><td style="text-align:center; font-weight:900; color:#fef08a; font-size:14px;">${item[1]}</td><td style="text-align:center; color:var(--text-muted);">${tot>0?((item[1]/tot)*100).toFixed(1)+'%':'0%'}</td></tr>`).join('') + `</tbody></table>`;
     }
 
-    createDonut('chartCoords', allTime.coords, ['#10b981','#ef4444']);
-    createDonut('chartLoc', allTime.loc, ['#10b981','#ef4444']);
-    createDonut('chartDate', allTime.date, ['#10b981','#ef4444']);
-    createDonut('chartTime', allTime.time, ['#10b981','#ef4444']);
-    createDonut('chartCompletenessTrig', allTime.trigger, ['#10b981','#ef4444']);
-    createDonut('chartCompletenessCat', allTime.category, ['#10b981','#ef4444']);
+    // ALL-TIME COMPLETENESS METRICS
+    // Now mapped to Dark Teal (#0f766e) for "Has Data" and Yellow (#eab308) for "No Data"
+    createDonut('chartCoords', allTime.coords, ['#0f766e','#eab308']);
+    createDonut('chartLoc', allTime.loc, ['#0f766e','#eab308']);
+    createDonut('chartDate', allTime.date, ['#0f766e','#eab308']);
+    createDonut('chartTime', allTime.time, ['#0f766e','#eab308']);
+    createDonut('chartCompletenessTrig', allTime.trigger, ['#0f766e','#eab308']);
+    createDonut('chartCompletenessCat', allTime.category, ['#0f766e','#eab308']);
 }
 
 // --- UTILITIES ---
@@ -373,7 +399,9 @@ function downloadChart(id, name) {
     const canvas = document.getElementById(id), temp = document.createElement('canvas');
     if(!canvas) return;
     temp.width = canvas.width; temp.height = canvas.height;
-    const ctx = temp.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,temp.width,temp.height); ctx.drawImage(canvas,0,0);
+    const ctx = temp.getContext('2d'); 
+    ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff'; 
+    ctx.fillRect(0,0,temp.width,temp.height); ctx.drawImage(canvas,0,0);
     const link = document.createElement('a'); link.download = name+'.png'; link.href = temp.toDataURL('image/png'); link.click();
 }
 
