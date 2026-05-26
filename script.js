@@ -101,25 +101,16 @@ async function connectRegistry() {
     try {
         const res = await fetch(API_URL);
         
-        if (!res.ok) {
-            throw new Error(`HTTP Error ${res.status}: The database server refused the connection.`);
-        }
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}: The database server refused the connection.`);
         
         let raw = await res.json();
-        
-        if (!Array.isArray(raw)) {
-            throw new Error("The API returned data, but it is not in the correct Array format.");
-        }
-        
-        if (raw.length === 0) {
-            throw new Error("The API connected successfully, but returned 0 records.");
-        }
+        if (!Array.isArray(raw)) throw new Error("The API returned data, but it is not in the correct Array format.");
+        if (raw.length === 0) throw new Error("The API connected successfully, but returned 0 records.");
 
         db = raw.map(i => {
             const lat = parseFloat(i.Latitude);
             const lng = parseFloat(i.Longitude);
             const yr = i.Year ? String(i.Year).trim() : (i.YYYYMMDD ? String(i.YYYYMMDD).substring(0, 4) : 'Unknown');
-            
             const searchStr = `${i.LSID || ''} ${i.MUNICIPALITY || ''} ${i.PROVINCE || ''} ${i.REGION || ''} ${i.LSTRIGGER || ''} ${i.LSCATEGORY || ''} ${yr}`.toLowerCase();
 
             return {
@@ -151,6 +142,43 @@ async function connectRegistry() {
                 <p style="margin-top:20px; font-size:14px; color:var(--text-muted);">Please verify that your API URL is correct and allows public cross-origin (CORS) requests.</p>
             </div>
         `;
+    }
+}
+
+// NEW: Manual Data Refresh Protocol
+async function refreshData() {
+    setStatus('FETCHING NEW DATA...', 'warning');
+    document.getElementById('feed').innerHTML = '<div style="padding:40px; text-align:center; font-weight:bold; color:var(--text-muted);">Downloading latest database records...</div>';
+    
+    try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+        let raw = await res.json();
+        if (!Array.isArray(raw) || raw.length === 0) throw new Error("No data returned.");
+
+        db = raw.map(i => {
+            const lat = parseFloat(i.Latitude);
+            const lng = parseFloat(i.Longitude);
+            const yr = i.Year ? String(i.Year).trim() : (i.YYYYMMDD ? String(i.YYYYMMDD).substring(0, 4) : 'Unknown');
+            const searchStr = `${i.LSID || ''} ${i.MUNICIPALITY || ''} ${i.PROVINCE || ''} ${i.REGION || ''} ${i.LSTRIGGER || ''} ${i.LSCATEGORY || ''} ${yr}`.toLowerCase();
+            return { ...i, lat: isNaN(lat) ? null : lat, lng: isNaN(lng) ? null : lng, deaths: parseInt(i.DEATHS) || 0, year: yr, searchStr: searchStr };
+        });
+
+        db.sort((a, b) => new Date(b.YYYYMMDD || 0) - new Date(a.YYYYMMDD || 0));
+        computeAllTimeMetrics();
+        
+        // Destroy all-time donut charts so they rebuild with fresh totals
+        allTimeChartsRendered = false; 
+        ['coords','loc','date','time','completenessTrig','completenessCat'].forEach(id => charts['chart' + id.charAt(0).toUpperCase() + id.slice(1)]?.destroy());
+
+        updateDropdownOptions();
+        filter(); // Rebuilds the UI and list with fresh variables
+        setStatus('SYSTEM ONLINE', 'online');
+    } catch (e) {
+        console.error("Refresh Error:", e);
+        setStatus('REFRESH FAILED', 'error');
+        alert("Failed to refresh data. Please check your internet connection.");
+        filter(); // Restore the view safely with whatever existing data we still have
     }
 }
 
@@ -226,7 +254,7 @@ function getFilteredData(onlyYear = false) {
     );
 }
 
-// --- CSV DOWNLOAD EXPORT ---
+// --- DATA EXPORTS (CSV & GeoJSON) ---
 function downloadCSV() {
     if (!currentFilteredData || currentFilteredData.length === 0) {
         alert("No data available to download based on your current filters.");
@@ -253,6 +281,46 @@ function downloadCSV() {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", "LIGTAS_Filtered_Database.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function downloadGeoJSON() {
+    if (!currentFilteredData || currentFilteredData.length === 0) {
+        alert("No data available to export to GeoJSON.");
+        return;
+    }
+
+    const features = currentFilteredData.map(row => {
+        let props = { ...row };
+        delete props.searchStr;
+        
+        let geometry = null;
+        if (row.lat !== null && row.lng !== null && !isNaN(row.lat) && !isNaN(row.lng)) {
+            geometry = {
+                "type": "Point",
+                "coordinates": [row.lng, row.lat]
+            };
+        }
+
+        return {
+            "type": "Feature",
+            "geometry": geometry,
+            "properties": props
+        };
+    });
+
+    const geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    };
+
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "LIGTAS_Filtered_Database.geojson");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -302,13 +370,11 @@ function renderPaginatedList() {
     feedEl.innerHTML = pageData.map(i => {
         const safeStringify = encodeURIComponent(JSON.stringify(i)).replace(/'/g, "%27");
         
-        // Dynamic GPS Badge
         const hasGPS = (i.lat !== null && i.lng !== null);
         const gpsBadge = hasGPS 
             ? `<span style="font-size:10px; font-weight:900; color:#10b981; background:rgba(16, 185, 129, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">📍 GPS</span>`
             : `<span style="font-size:10px; font-weight:900; color:#ef4444; background:rgba(239, 68, 68, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">🚫 NO GPS</span>`;
 
-        // NEW: Dynamic Image Badge
         const hasImg = (i.IMAGELINK && String(i.IMAGELINK).trim() !== '');
         const imgBadge = hasImg 
             ? `<span style="font-size:10px; font-weight:900; color:#3b82f6; background:rgba(59, 130, 246, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">🖼️ IMAGE</span>`
