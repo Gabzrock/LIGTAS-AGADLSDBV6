@@ -300,14 +300,30 @@ function renderPaginatedList() {
     });
 
     feedEl.innerHTML = pageData.map(i => {
-        // We explicitly convert apostrophes (') to %27 so they don't break the HTML string wrapper
         const safeStringify = encodeURIComponent(JSON.stringify(i)).replace(/'/g, "%27");
         
+        // Dynamic GPS Badge
+        const hasGPS = (i.lat !== null && i.lng !== null);
+        const gpsBadge = hasGPS 
+            ? `<span style="font-size:10px; font-weight:900; color:#10b981; background:rgba(16, 185, 129, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">📍 GPS</span>`
+            : `<span style="font-size:10px; font-weight:900; color:#ef4444; background:rgba(239, 68, 68, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">🚫 NO GPS</span>`;
+
+        // NEW: Dynamic Image Badge
+        const hasImg = (i.IMAGELINK && String(i.IMAGELINK).trim() !== '');
+        const imgBadge = hasImg 
+            ? `<span style="font-size:10px; font-weight:900; color:#3b82f6; background:rgba(59, 130, 246, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">🖼️ IMAGE</span>`
+            : `<span style="font-size:10px; font-weight:900; color:#64748b; background:rgba(100, 116, 139, 0.1); padding: 3px 6px; border-radius: 4px; vertical-align:middle; display:inline-block; line-height:1;">🚫 NO IMG</span>`;
+
         return `
             <div class="list-row ${i.deaths > 0 ? 'high-risk' : ''}" onclick="openReport(JSON.parse(decodeURIComponent('${safeStringify}')))">
                 <div class="lr-id">${i.LSID || 'N/A'}</div>
                 <div class="lr-date">${i.YYYYMMDD || 'Unknown'}</div>
-                <div class="lr-col lr-loc">${i.MUNICIPALITY || 'Unknown'}, ${i.PROVINCE || 'Unknown'}</div>
+                <div class="lr-col lr-loc">
+                    ${i.MUNICIPALITY || 'Unknown'}, ${i.PROVINCE || 'Unknown'}
+                    <div style="margin-top:6px; display:flex; gap:6px;">
+                        ${gpsBadge} ${imgBadge}
+                    </div>
+                </div>
                 <div class="lr-col"><span class="lr-trig">${i.LSTRIGGER || 'Registry Entry'}</span></div>
                 ${i.deaths > 0 ? `<div class="lr-badge">💀 ${i.deaths} FATALITIES</div>` : ''}
             </div>
