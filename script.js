@@ -4,49 +4,61 @@ let db = [];
 let map, markers, userMarker;
 let charts = {}; 
 
-// Theme Initialization
+// --- THEME INITIALIZATION (Supports Light, Dark, Neon, Environmental) ---
 const savedTheme = localStorage.getItem('theme') || 'light';
 document.documentElement.setAttribute('data-theme', savedTheme);
-Chart.defaults.color = savedTheme === 'dark' ? '#cbd5e1' : '#475569';
+if(savedTheme === 'neon') Chart.defaults.color = '#00f2fe';
+else if(savedTheme === 'environmental') Chart.defaults.color = '#432418';
+else if(savedTheme === 'dark') Chart.defaults.color = '#cbd5e1';
+else Chart.defaults.color = '#475569';
 
 // Pagination & Performance State
 let currentFilteredData = [];
 let currentPage = 1;
 const ITEMS_PER_PAGE = 50; 
-let allTimeChartsRendered = false; // Performance flag to prevent unnecessary re-rendering
+let allTimeChartsRendered = false; 
 let allTimeMetrics = null;
 
 const PH_CENTER = [12.8797, 121.7740];
 const API_URL = 'https://sheetlabs.com/LA25/LIGTAS_LSDB_WEB_APIv2'; 
 
 function init() {
-    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
+    try {
+        const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
 
-    map = L.map('map', { center: PH_CENTER, zoom: 5, layers: [sat], zoomControl: false });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+        map = L.map('map', { center: PH_CENTER, zoom: 5, layers: [sat], zoomControl: false });
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const lyProvinces = L.layerGroup();
-    const lyRegions = L.layerGroup();
-    const lyFaults = L.layerGroup();
-    markers = L.layerGroup().addTo(map);
+        const lyProvinces = L.layerGroup();
+        const lyRegions = L.layerGroup();
+        const lyFaults = L.layerGroup();
+        markers = L.layerGroup().addTo(map);
 
-    ['provinces', 'regions', 'faults'].forEach((key, i) => {
-        const colors = ['red', 'yellow', 'green'];
-        fetch(`https://raw.githubusercontent.com/Gabzrock/LIGTASAGADEWSV3/refs/heads/main/uRIL_AWS_${key === 'provinces' ? 'High' : key === 'regions' ? 'Moderate' : 'Low'}_Susceptibility.geojson`)
-            .then(r => r.json())
-            .then(data => L.geoJson(data, { style: { color: colors[i], fillOpacity: 0.3 } }).addTo(i === 0 ? lyProvinces : i === 1 ? lyRegions : lyFaults))
-            .catch(err => console.warn(`Could not load GeoJSON layer: ${key}`, err)); // Error handling for layers
-    });
+        const loadGeoJson = (key, layer, color) => {
+            const url = `https://raw.githubusercontent.com/Gabzrock/LIGTASAGADEWSV3/refs/heads/main/uRIL_AWS_${key}_Susceptibility.geojson`;
+            fetch(url)
+                .then(r => { if (!r.ok) throw new Error("Network response was not ok"); return r.json(); })
+                .then(data => L.geoJson(data, { style: { color: color, fillOpacity: 0.3 } }).addTo(layer))
+                .catch(err => console.warn(`Could not load GeoJSON layer: ${key}`, err));
+        };
 
-    L.control.layers({ "Satellite": sat, "OSM": osm }, { "Markers": markers, "MGB-High": lyProvinces, "MGB-Med": lyRegions, "MGB-Low": lyFaults }).addTo(map);
+        loadGeoJson('High', lyProvinces, 'red');
+        loadGeoJson('Moderate', lyRegions, 'yellow');
+        loadGeoJson('Low', lyFaults, 'green');
 
-    map.on('moveend', () => {
-        const extToggle = document.getElementById('fExtent');
-        if (extToggle && extToggle.checked) filter(); 
-    });
+        L.control.layers({ "Satellite": sat, "OSM": osm }, { "Markers": markers, "MGB-High": lyProvinces, "MGB-Med": lyRegions, "MGB-Low": lyFaults }).addTo(map);
 
-    connectRegistry();
+        map.on('moveend', () => {
+            const extToggle = document.getElementById('fExtent');
+            if (extToggle && extToggle.checked) filter(); 
+        });
+
+        connectRegistry();
+    } catch (error) {
+        console.error("Map Initialization Error:", error);
+        setStatus('MAP ERROR', 'error');
+    }
 }
 
 // --- HAMBURGER MENU & THEME TOGGLE ---
@@ -60,15 +72,21 @@ function closeMobileMenu() {
 
 function toggleTheme() {
     const root = document.documentElement;
-    const currentTheme = root.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const currentTheme = root.getAttribute('data-theme') || 'light';
+    
+    const themes = ['light', 'dark', 'neon', 'environmental'];
+    let currentIndex = themes.indexOf(currentTheme);
+    if (currentIndex === -1) currentIndex = 0;
+    const newTheme = themes[(currentIndex + 1) % themes.length];
     
     root.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
     
-    Chart.defaults.color = newTheme === 'dark' ? '#cbd5e1' : '#475569';
+    if(newTheme === 'neon') Chart.defaults.color = '#00f2fe';
+    else if(newTheme === 'environmental') Chart.defaults.color = '#432418';
+    else if(newTheme === 'dark') Chart.defaults.color = '#cbd5e1';
+    else Chart.defaults.color = '#475569';
     
-    // Force re-render of static charts to apply new theme colors
     allTimeChartsRendered = false; 
     ['coords','loc','date','time','completenessTrig','completenessCat'].forEach(id => charts['chart' + id.charAt(0).toUpperCase() + id.slice(1)]?.destroy());
     
@@ -78,49 +96,65 @@ function toggleTheme() {
 // --- DATA SYNC & ERROR HANDLING ---
 async function connectRegistry() {
     setStatus('SYNCING DATA...', 'warning');
+    const feedEl = document.getElementById('feed');
+    
     try {
         const res = await fetch(API_URL);
         
-        // Strict Error Handling
-        if (!res.ok) throw new Error(`HTTP Error: ${res.status} ${res.statusText}`);
+        if (!res.ok) {
+            throw new Error(`HTTP Error ${res.status}: The database server refused the connection.`);
+        }
         
         let raw = await res.json();
-        if (!Array.isArray(raw) || raw.length === 0) throw new Error("API returned an empty or invalid dataset.");
+        
+        if (!Array.isArray(raw)) {
+            throw new Error("The API returned data, but it is not in the correct Array format.");
+        }
+        
+        if (raw.length === 0) {
+            throw new Error("The API connected successfully, but returned 0 records.");
+        }
 
         db = raw.map(i => {
-            // Safe parsing to prevent application crashes from corrupted data
             const lat = parseFloat(i.Latitude);
             const lng = parseFloat(i.Longitude);
             const yr = i.Year ? String(i.Year).trim() : (i.YYYYMMDD ? String(i.YYYYMMDD).substring(0, 4) : 'Unknown');
             
+            const searchStr = `${i.LSID || ''} ${i.MUNICIPALITY || ''} ${i.PROVINCE || ''} ${i.REGION || ''} ${i.LSTRIGGER || ''} ${i.LSCATEGORY || ''} ${yr}`.toLowerCase();
+
             return {
                 ...i,
                 lat: isNaN(lat) ? null : lat,
                 lng: isNaN(lng) ? null : lng,
                 deaths: parseInt(i.DEATHS) || 0,
                 year: yr,
-                // Performance Optimization: Pre-compile search string once (O(1) search time)
-                searchStr: `${i.LSID || ''} ${i.MUNICIPALITY || ''} ${i.PROVINCE || ''} ${i.REGION || ''} ${i.LSTRIGGER || ''} ${i.LSCATEGORY || ''} ${yr}`.toLowerCase()
+                searchStr: searchStr
             };
         });
 
         db.sort((a, b) => new Date(b.YYYYMMDD || 0) - new Date(a.YYYYMMDD || 0));
-        
-        // Performance Optimization: Calculate heavy metrics only once upon initial load
         computeAllTimeMetrics();
 
         setStatus('SYSTEM ONLINE', 'online');
         initFilters();
         filter();
+        
     } catch (e) {
         console.error("Critical System Failure:", e);
         setStatus('CONNECTION FAILED', 'error');
-        document.getElementById('feed').innerHTML = `<div style="padding:40px; text-align:center; color:var(--danger); font-weight:bold; font-size:16px;">Failed to load system data. <br><br>Error: ${e.message} <br><br>Please try refreshing the page or check your connection.</div>`;
+        
+        feedEl.innerHTML = `
+            <div style="padding:40px; text-align:center; color:var(--danger); background:var(--card-bg); border-radius:8px; margin:20px; border: 2px solid var(--danger);">
+                <h3 style="margin-top:0;">⚠️ System Initialization Failed</h3>
+                <p style="font-weight:bold;">Error Details:</p>
+                <code style="background:var(--input-bg); padding:10px; border-radius:4px; display:block; text-align:left; color:var(--text);">${e.message}</code>
+                <p style="margin-top:20px; font-size:14px; color:var(--text-muted);">Please verify that your API URL is correct and allows public cross-origin (CORS) requests.</p>
+            </div>
+        `;
     }
 }
 
 // --- FILTER CONTROLS & DEBOUNCING ---
-// Performance Optimization: Prevents function from firing on every keystroke
 function debounce(func, timeout = 300) {
     let timer;
     return (...args) => {
@@ -136,17 +170,14 @@ function toggleFilters() {
 }
 
 function initFilters() {
-    document.getElementById('fY').innerHTML = `<option value="1">Past 1 Year</option><option value="2">Past 2 Years</option><option value="3">Past 3 Years</option><option value="all">All Time</option>`;
-    
-    // Attach debounced filter to search input
     document.getElementById('q').addEventListener('input', debounce(() => filter(), 300));
-    
     ['fY', 'fR'].forEach(id => document.getElementById(id).addEventListener('change', () => { updateDropdownOptions(); filter(); }));
     ['fP', 'fT'].forEach(id => document.getElementById(id).addEventListener('change', filter));
     updateDropdownOptions();
 }
 
 function updateDropdownOptions() {
+    populateDropdown('fY', 'year', 'All Years', db, true);
     const timeFiltered = getFilteredData(true);
     const reg = document.getElementById('fR').value;
     
@@ -155,44 +186,81 @@ function updateDropdownOptions() {
     populateDropdown('fP', 'PROVINCE', 'All Provinces', reg ? timeFiltered.filter(i => i.REGION === reg) : timeFiltered);
 }
 
-function populateDropdown(id, key, label, data) {
+function populateDropdown(id, key, label, data, sortDesc = false) {
     const el = document.getElementById(id);
+    if (!el) return;
     const cur = el.value;
-    const items = [...new Set(data.map(i => i[key]))].filter(v => v && v !== 'Unknown').sort();
+    
+    let items = [...new Set(data.map(i => i[key]))].filter(v => v && v !== 'Unknown').sort();
+    if (sortDesc) items.reverse();
+    if (data.some(i => i[key] === 'Unknown')) items.push('Unknown');
+    
     el.innerHTML = `<option value="">${label}</option>` + items.map(v => `<option value="${v}">${v}</option>`).join('');
     if (items.includes(cur)) el.value = cur;
 }
 
-function getFilteredData(onlyTime = false) {
-    const tF = document.getElementById('fY').value;
-    const now = new Date();
-    const cutoff = tF === '1' ? new Date(now.getFullYear()-1,0) : tF === '2' ? new Date(now.getFullYear()-2,0) : tF === '3' ? new Date(now.getFullYear()-3,0) : new Date(0);
+function getFilteredData(onlyYear = false) {
+    const fY = document.getElementById('fY') ? document.getElementById('fY').value : '';
     
-    let res = db.filter(i => new Date(i.YYYYMMDD || 0) >= cutoff || tF === 'all');
-    if (onlyTime) return res;
+    let res = db.filter(i => !fY || i.year === fY);
+    if (onlyYear) return res;
     
-    const q = document.getElementById('q').value.toLowerCase().trim();
+    const qEl = document.getElementById('q');
+    const q = qEl ? qEl.value.toLowerCase().trim() : '';
+    
     const fExtent = document.getElementById('fExtent');
     const applyExtent = fExtent ? fExtent.checked : false;
     let bounds = null;
     if (applyExtent) bounds = map.getBounds();
 
-    const fR = document.getElementById('fR').value;
-    const fP = document.getElementById('fP').value;
-    const fT = document.getElementById('fT').value;
+    const fR = document.getElementById('fR') ? document.getElementById('fR').value : '';
+    const fP = document.getElementById('fP') ? document.getElementById('fP').value : '';
+    const fT = document.getElementById('fT') ? document.getElementById('fT').value : '';
 
     return res.filter(i => 
         (!applyExtent || (i.lat !== null && i.lng !== null && bounds.contains([i.lat, i.lng]))) &&
-        (!q || i.searchStr.includes(q)) && // Using pre-compiled O(1) string check
+        (!q || i.searchStr.includes(q)) && 
         (!fR || i.REGION === fR) &&
         (!fP || i.PROVINCE === fP) &&
         (!fT || i.LSTRIGGER === fT)
     );
 }
 
+// --- CSV DOWNLOAD EXPORT ---
+function downloadCSV() {
+    if (!currentFilteredData || currentFilteredData.length === 0) {
+        alert("No data available to download based on your current filters.");
+        return;
+    }
+    
+    const excludedKeys = ['searchStr', 'lat', 'lng', 'year']; 
+    const headers = Object.keys(currentFilteredData[0]).filter(k => !excludedKeys.includes(k));
+
+    let csvContent = headers.join(",") + "\n";
+
+    currentFilteredData.forEach(row => {
+        let rowData = headers.map(header => {
+            let val = row[header] === null || row[header] === undefined ? "" : String(row[header]);
+            val = val.replace(/"/g, '""');
+            if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`;
+            return val;
+        });
+        csvContent += rowData.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "LIGTAS_Filtered_Database.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 // --- PAGINATION & LIST RENDERER ---
 function filter() {
-    if (!db || db.length === 0) return; // Guard clause against empty DB
+    if (!db || db.length === 0) return; 
     currentFilteredData = getFilteredData();
     document.getElementById('rec-count').innerText = `${currentFilteredData.length} RECORDS MATCHED`;
     
@@ -203,7 +271,8 @@ function filter() {
 
 function changePage(direction) {
     currentPage += direction;
-    document.getElementById('feed').scrollTop = 0;
+    const feed = document.getElementById('feed');
+    if (feed) feed.scrollTop = 0;
     renderPaginatedList();
 }
 
@@ -223,15 +292,19 @@ function renderPaginatedList() {
     const pageData = currentFilteredData.slice(startIndex, endIndex);
     const totalPages = Math.ceil(currentFilteredData.length / ITEMS_PER_PAGE);
 
-    // Only render markers for the items currently on screen to optimize Leaflet Canvas
     pageData.forEach(i => {
-        if(i.lat) L.circleMarker([i.lat, i.lng], {radius:8, fillColor:i.deaths>0?'#ef4444':'#f59e0b', color:'#fff', fillOpacity:0.9}).addTo(markers).on('click', () => openReport(i));
+        if(i.lat && i.lng) {
+            L.circleMarker([i.lat, i.lng], {radius:8, fillColor:i.deaths>0?'#ef4444':'#f59e0b', color:'#fff', fillOpacity:0.9})
+             .addTo(markers).on('click', () => openReport(i));
+        }
     });
 
     feedEl.innerHTML = pageData.map(i => {
-        const safeStringify = JSON.stringify(i).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        // We explicitly convert apostrophes (') to %27 so they don't break the HTML string wrapper
+        const safeStringify = encodeURIComponent(JSON.stringify(i)).replace(/'/g, "%27");
+        
         return `
-            <div class="list-row ${i.deaths > 0 ? 'high-risk' : ''}" onclick="openReport(${safeStringify})">
+            <div class="list-row ${i.deaths > 0 ? 'high-risk' : ''}" onclick="openReport(JSON.parse(decodeURIComponent('${safeStringify}')))">
                 <div class="lr-id">${i.LSID || 'N/A'}</div>
                 <div class="lr-date">${i.YYYYMMDD || 'Unknown'}</div>
                 <div class="lr-col lr-loc">${i.MUNICIPALITY || 'Unknown'}, ${i.PROVINCE || 'Unknown'}</div>
@@ -291,7 +364,9 @@ function openReport(i) {
     if(!i) return;
     const b = document.getElementById('m-body');
     const row = (l, v) => `<div class="field-grp"><div class="f-lbl">${l}</div><div class="f-val">${v || '—'}</div></div>`;
-    const safeStringify = JSON.stringify(i).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+    
+    // We explicitly convert apostrophes (') to %27 here as well to fix the Map button click
+    const safeStringify = encodeURIComponent(JSON.stringify(i)).replace(/'/g, "%27");
     
     b.innerHTML = `
         <div class="report-header">
@@ -302,7 +377,10 @@ function openReport(i) {
                 </div>
             </div>
             ${(i.lat !== null && i.lng !== null) ? 
-                `<button class="btn btn-main no-print btn-sm" style="white-space:nowrap; width:auto;" onclick="flyToLocation(${safeStringify})">📍 Map</button>` 
+                `<div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-main no-print btn-sm" style="white-space:nowrap; width:auto;" onclick="flyToLocation(JSON.parse(decodeURIComponent('${safeStringify}')))">📍 Map</button>
+                    <button class="btn btn-sec no-print btn-sm" style="white-space:nowrap; width:auto;" onclick="window.open('https://www.google.com/maps?q=${i.lat},${i.lng}', '_blank')">🗺️ Google Maps</button>
+                 </div>` 
                 : '<span class="no-gps-badge no-print">NO GPS DATA</span>'}
         </div>
 
@@ -352,8 +430,6 @@ function openReport(i) {
 }
 
 // --- DYNAMIC ANALYTICS ENGINE ---
-
-// Pre-compute static data to save overhead
 function computeAllTimeMetrics() {
     allTimeMetrics = { 
         coords:{'Has GPS':0,'No GPS':0}, loc:{'Has Location':0,'No Location':0}, 
@@ -375,7 +451,6 @@ function buildCharts(data) {
     const totalEl = document.getElementById('totalReportCount');
     if(totalEl) totalEl.innerText = `ANALYZING ${data.length} MATCHING RECORDS`;
     
-    // Performance Optimization: Destroy ONLY dynamic charts, leave static ones alone unless theme changed
     ['year','prov','trig','genSrc','specSrc'].forEach(id => charts['chart'+id.charAt(0).toUpperCase()+id.slice(1)]?.destroy());
 
     const c = { year:{}, prov:{}, trig:{}, genSrc:{}, specSrc:{} };
@@ -387,8 +462,14 @@ function buildCharts(data) {
         c.specSrc[i.SPECIFICSOURCE||'N/A'] = (c.specSrc[i.SPECIFICSOURCE||'N/A']||0)+1;
     });
 
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const labelColor = isDark ? '#cbd5e1' : '#475569';
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    let labelColor;
+    if(currentTheme === 'neon') labelColor = '#00f2fe';
+    else if(currentTheme === 'environmental') labelColor = '#432418';
+    else if(currentTheme === 'dark') labelColor = '#cbd5e1';
+    else labelColor = '#475569';
+    
+    let borderColor = currentTheme === 'dark' || currentTheme === 'neon' ? '#1e293b' : '#ffffff';
 
     const createScrollableBar = (id, obj, color) => {
         let ent = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
@@ -406,12 +487,11 @@ function buildCharts(data) {
         const el = document.getElementById(id);
         if(!el) return;
         charts[id] = new Chart(el, { 
-            type:'doughnut', data: { labels: Object.keys(obj), datasets: [{ data: Object.values(obj), backgroundColor: colors, borderColor: isDark ? '#1e293b' : '#ffffff' }] }, 
+            type:'doughnut', data: { labels: Object.keys(obj), datasets: [{ data: Object.values(obj), backgroundColor: colors, borderColor: borderColor }] }, 
             options: { maintainAspectRatio: false, plugins: { legend: hide?{display:false}:{position:'bottom', labels: {font: {size:12, weight:'bold'}}}, datalabels: hide?{display:false}:{color:'#fff', font: {weight:'bold', size:12}, textAlign:'center', formatter:(v,c)=>{if(v===0)return''; let s=0; c.chart.data.datasets[0].data.map(d=>s+=d); return `${v}\n(${(v*100/s).toFixed(1)}%)`}} } } 
         });
     };
 
-    // Render Dynamic Charts
     const elYear = document.getElementById('chartYear');
     if(elYear) charts['chartYear'] = new Chart(elYear, { type:'bar', data: { labels: Object.keys(c.year).sort(), datasets: [{data: Object.values(c.year), backgroundColor: '#3b82f6', borderRadius: 4}] }, options: { maintainAspectRatio: false, plugins: {legend:{display:false}, datalabels: {color: labelColor, anchor:'end', align:'top', font:{weight:'bold', size:13}, formatter:v=>v>0?v:''}}, layout:{padding:{top:25}}, scales: { x: { ticks: { font: {weight:'bold'} } } } } });
     
@@ -432,7 +512,6 @@ function buildCharts(data) {
         trigsSorted.map((item, i) => `<tr><td style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; background:${trigPalette[i%trigPalette.length]}; border-radius:50%; display:inline-block; flex-shrink:0;"></span><span style="line-height:1.3;">${item[0]}</span></td><td style="text-align:center; font-weight:900; color:#fef08a; font-size:14px;">${item[1]}</td><td style="text-align:center; color:var(--text-muted);">${tot>0?((item[1]/tot)*100).toFixed(1)+'%':'0%'}</td></tr>`).join('') + `</tbody></table></div>`;
     }
 
-    // Performance Optimization: Render heavy ALL-TIME Completeness metrics only ONCE
     if (!allTimeChartsRendered && allTimeMetrics) {
         createDonut('chartCoords', allTimeMetrics.coords, ['#0f766e','#eab308']);
         createDonut('chartLoc', allTimeMetrics.loc, ['#0f766e','#eab308']);
@@ -455,7 +534,12 @@ function downloadChart(id, name) {
     const link = document.createElement('a'); link.download = name+'.png'; link.href = temp.toDataURL('image/png'); link.click();
 }
 
-function setStatus(msg, type) { document.getElementById('sys-text').innerText = msg; document.getElementById('sys-pulse').className = `pulse ${type}`; }
+function setStatus(msg, type) { 
+    const txt = document.getElementById('sys-text');
+    const pulse = document.getElementById('sys-pulse');
+    if (txt) txt.innerText = msg; 
+    if (pulse) pulse.className = `pulse ${type}`; 
+}
 
 function locateUser() {
     setStatus('SEARCHING GPS...', 'warning');
@@ -469,11 +553,11 @@ function locateUser() {
 }
 
 function reset() {
-    document.getElementById('q').value = '';
-    document.getElementById('fY').value = '1'; 
-    document.getElementById('fR').value = '';
-    document.getElementById('fP').value = '';
-    document.getElementById('fT').value = '';
+    if (document.getElementById('q')) document.getElementById('q').value = '';
+    if (document.getElementById('fY')) document.getElementById('fY').value = ''; 
+    if (document.getElementById('fR')) document.getElementById('fR').value = '';
+    if (document.getElementById('fP')) document.getElementById('fP').value = '';
+    if (document.getElementById('fT')) document.getElementById('fT').value = '';
     
     const extToggle = document.getElementById('fExtent');
     if(extToggle) extToggle.checked = false;
