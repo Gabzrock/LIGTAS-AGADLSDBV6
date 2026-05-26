@@ -365,12 +365,12 @@ function openReport(i) {
     const b = document.getElementById('m-body');
     const row = (l, v) => `<div class="field-grp"><div class="f-lbl">${l}</div><div class="f-val">${v || '—'}</div></div>`;
     
-    // We explicitly convert apostrophes (') to %27 here as well to fix the Map button click
     const safeStringify = encodeURIComponent(JSON.stringify(i)).replace(/'/g, "%27");
     
     b.innerHTML = `
         <div class="report-header">
             <div>
+                <div style="font-size:12px; font-weight:900; color:var(--accent); letter-spacing: 1px; margin-bottom:5px;">LSID: ${i.LSID || 'N/A'}</div>
                 <h2>${i.MUNICIPALITY || 'Unknown Area'} Landslide</h2>
                 <div class="report-meta">
                     ${i.PROVINCE || '—'} | ${i.REGION || '—'} | Date: ${i.YYYYMMDD || 'Unknown'} at ${i['12HOURFO'] || '—'} ${i.AMPM || ''}
