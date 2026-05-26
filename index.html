@@ -25,7 +25,7 @@
             <span class="nav-item" onclick="locateUser(); closeMobileMenu()">My Location</span>
             <span class="nav-item theme-btn" onclick="toggleTheme(); closeMobileMenu()">🎨 Theme</span>
             
-            <span class="nav-item" style="background: rgba(255,255,255,0.15);" onclick="window.open('https://ligtas.uplb.edu.ph/LIGTAS-AGAD_new_portal-main/', '_blank'); closeMobileMenu()">🌐 LIGTAS-AGAD Portal</span>
+             <span class="nav-item" style="background: rgba(255,255,255,0.15);" onclick="window.open('https://ligtas.uplb.edu.ph/LIGTAS-AGAD_new_portal-main/', '_blank'); closeMobileMenu()">🌐 LIGTAS-AGAD Portal</span>
             <span class="nav-item" style="background: rgba(255,255,255,0.15);" onclick="window.open('https://script.google.com/a/macros/up.edu.ph/s/AKfycbwgKyx6_d9A7q5tw1x-ZkqTPIbRSx2lR4Y6LNU6UTqVzq4PTCshmzuWm3iT8ILN8nxAFg/exec', '_blank'); closeMobileMenu()">🌐 Landslide Encoder Form</span>
             <span class="nav-item" style="background: rgba(255,255,255,0.15);" onclick="window.open('https://docs.google.com/spreadsheets/d/1Aj9Un6AwXpI9R7eNYrDmLvB86PebOGdPuJa98u8W8mE/edit?gid=238857508#gid=238857508', '_blank'); closeMobileMenu()">🌐 Spreadsheets</span>
         </div>
@@ -34,9 +34,11 @@
     <div class="toolbar no-print">
         <div class="toolbar-header">
             <span style="font-weight:900; font-size:14px; color:var(--primary);">🔍 DATA FILTERS</span>
-            <div style="display: flex; gap: 5px;">
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                 <button class="btn btn-main btn-sm" onclick="reset()">Reset</button>
+                <button class="btn btn-sec btn-sm" onclick="refreshData()">🔄 Refresh</button>
                 <button class="btn btn-sec btn-sm" style="background:#10b981; color:white; border:none;" onclick="downloadCSV()">⬇ CSV</button>
+                <button class="btn btn-sec btn-sm" style="background:#3b82f6; color:white; border:none;" onclick="downloadGeoJSON()">⬇ GeoJSON</button>
                 <button class="btn btn-sec btn-sm" onclick="toggleFilters()">Show/Hide</button>
             </div>
         </div>
